@@ -1,0 +1,455 @@
+---
+title: "Linear Regression"
+author: "Dr Hazlienor Mohd Hatta"
+date: "15-April 2024"
+format:
+  html:
+    prefer-html: true
+    toc: true
+    toc-location: left
+    toc-depth: 4
+    toc-expand: 2
+    toc-title: Contents
+    code-links:
+      text: Github repo
+      icon: "file-code"
+      href: https://github.com/drhazlienor/regression.git
+      smooth-scroll: true
+    theme:
+      light: journal
+      dark:
+      - journal
+      - "theme-dark.scss"
+    grid:
+      sidebar-width: 300px
+      margin-width: 300px
+      body-width: 900px
+self-contained: true
+resource_files:
+- linear regression.html
+---
+
+# Background
+
+## Problem statement
+
+Diabetes Mellitus (DM) is a growing public health concern, with HbA1c (glycated hemoglobin) serving as a crucial marker for identifying individuals at risk and monitoring glycemic control. While DM diagnosis is important, focusing on HbA1c levels provides a more nuanced view of glycemic status across both diabetic and non-diabetic individuals. This study aims to explore the demographic, anthropometric, and clinical factors associated with HbA1c levels to better understand the risk and distribution of hyperglycemia in the general population.
+
+## Objective
+
+To identify key factors that are associated with variations in HbA1c levels among both diabetic and non-diabetic individuals.
+
+## Motivation
+
+## Assumption
+
+-   **Linearity:** The relationship between the independent variables and the dependent variable is assumed to be linear.
+
+<!-- -->
+
+-   **Normality of Residuals:** The residuals (differences between observed and predicted values) should be approximately normally distributed.
+
+-   **Homoscedasticity (Constant Variance of Residuals):** The residuals should have constant variance across all levels of the independent variables.
+
+<!-- -->
+
+-   **Independence of Observations:** Each observation should be independent of others; there should be no autocorrelation.
+
+-   **No Multicollinearity:** The independent variables should not be too highly correlated with each other.
+
+-   **No Influential Outliers:** The model should not be overly affected by extreme values or influential data points.
+
+# Dataset description
+
+This dataset consists of 3,820 individuals and is primarily focused on identifying potential predictors of Diabetes Mellitus (DM), with the variable **dmdx** (Diabetes diagnosis) serving as the outcome variable. The dataset includes various demographic, anthropometric, and clinical measurements to evaluate the factors that may influence the level of HbA1c.
+
+| **Variable** | **Description**                                 |
+|--------------|-------------------------------------------------|
+| `codesub`    | Unique individual ID                            |
+| `age`        | Age in years                                    |
+| `dmdx`       | Ever diagnosed with diabetes (0 = No, 1 = Yes)  |
+| `height`     | Height in meters                                |
+| `weight`     | Weight in kg                                    |
+| `waist`      | Waist circumference in cm                       |
+| `hip`        | Hip circumference in cm                         |
+| `msbpr`      | Mean systolic blood pressure (right arm, mmHg)  |
+| `mdbpr`      | Mean diastolic blood pressure (right arm, mmHg) |
+| `hba1c`      | HbA1c level (mmol/l)                            |
+| `fbs`        | Fasting blood sugar (mmol/l)                    |
+| `mogtt2h`    | 2-hour post MOGTT glucose (mmol/l)              |
+| `totchol`    | Total cholesterol (mmol/l)                      |
+| `ftrigliz`   | Fasting triglycerides (mmol/l)                  |
+| `hdl`        | HDL cholesterol (mmol/l)                        |
+| `ldl`        | LDL cholesterol (mmol/l)                        |
+| `gender`     | Gender (0 = Female, 1 = Male)                   |
+| `crural`     | Residence area (0 = Urban, 1 = Rural)           |
+| `bmi`        | Body Mass Index (kg/m²)                         |
+
+# Workflow
+
+1.  Prepare environment
+2.  Prepare data(read-view-transform-describe-explore)
+3.  Estimate: univariate analysis & Multivariate analysis - fitting the model (include interaction and confounding)
+4.  Inference
+5.  Prediction
+6.  Model assessment
+7.  Presentation
+
+## Prepare environment
+
+**Install required packages**
+
+remove \# when you run this code
+
+```{r}
+#install.packages(setdiff(c("haven", "psych", "tidyverse", "broom", "gtsummary", "ggplot2", "GGally", "lmtest", "rsq", "car", "sjplot", "corrplot"), rownames(installed.packages())))
+```
+
+load library
+
+```{r}
+library(haven)       # To read SPSS, Stata, and SAS data files
+library(psych)       # For descriptive statistics and psychometric analysis
+library(tidyverse)   # for data manipulation and visualization
+library(broom)       # Converts model objects into tidy data frames
+library(gtsummary)   # For publication-ready summary tables
+library(ggplot2)     # Data visualization based on the grammar of graphics
+library(GGally)      # for correlation plot, scatterplot matrices, etc.
+library(lmtest)      # Diagnostic tests for linear regression 
+library(rsq)         # Calculates R-squared and adj R-squared 
+library(car)         # Companion to Applied Regression (tools like VIF, Anova)
+library(sjPlot)      # Plotting and tabulating regression results 
+library(corrplot)    # plot correlation heatmap
+```
+
+## Load data
+
+Lets rename the data as 'diabetes'.
+
+```{r}
+diabetes <- read_dta("diabetes.dta")
+summary(diabetes)
+```
+
+## Data Exploration and Wrangling
+
+```{r}
+str(diabetes)
+```
+
+convert all categorical variable as factor
+
+```{r}
+diabetes <- 
+  diabetes %>% 
+  mutate(across(where(is.labelled), as_factor))
+glimpse(diabetes)
+```
+
+summary of all variables
+
+```{r}
+summary(diabetes)
+```
+
+lets examine the distribution of some of the variables
+
+you can use histogram
+
+```{r}
+hist(diabetes$age) 
+```
+
+or boxplot
+
+```{r}
+boxplot(diabetes$bmi, 
+        main = "BMI")
+```
+
+Lets visualize the relationship between some of the independent variables and dependent variables
+
+categorical independent variable vs outcome variable
+
+```{r}
+boxplot(hba1c ~ gender, 
+        data = diabetes, 
+        main = "Boxplot of HbA1c by Gender")
+```
+
+between numerical variable
+
+you can visualize the distribution using ggally package. This will give you scatterplots for each pair of variables, as well as histograms on the diagonal to show the distribution of each variable.
+
+```{r}
+ggpairs(diabetes, columns = c("age", "bmi", "totchol", "hba1c"))
+```
+
+or calculate the pairwise Pearson correlation coefficients
+
+```{r}
+corr <- diabetes %>% dplyr::select(age, msbpr, mdbpr, fbs, mogtt2h, 
+                    totchol, ftrigliz, hdl, hba1c) %>% 
+                    cor(use = 'complete.obs')
+corr
+```
+
+or create a correlation heatmap
+
+```{r}
+corrplot(corr, type = 'upper', order = 'hclust')
+```
+
+## Estimate
+
+### Univariable Analysis
+
+Lets do univariable analysis first:
+
+-   **Identify variables** that have a significant association with the outcome when considered **individually**. This is useful before building a multivariable model.
+
+-   When the **effect size** changes between univariable and multivariable regression — either stronger or weaker — it gives insight into how the predictor interacts with other variables.
+
+    -   If a **confounder** is present, the effect size in simple linear regression is often larger and becomes smaller after adjustment in multiple linear regression.
+
+    -   Sometimes a variable that shows little or no association in SLR becomes important in MLR because another variable was masking its effect (**suppression**)
+
+    -   If two or more predictors are strongly correlated, the model may have difficulty estimating their individual effects accurately. This can cause large changes in the coefficients when moving from SLR to MLR (**multicollinearity**)
+
+Lets build a SLR model with hba1c as outcome variable and **age, gender, crural, bmi, totchol** as independent variable.
+
+Age first.
+
+```{r}
+uv_age <- lm(hba1c ~ age, data = diabetes)
+summary(uv_age)
+```
+
+Lets understand the output
+
+-   **Intercept**: When age = 0, the predicted HbA1c is **4.814** (age is never 0 but provide the baseline value).
+
+-   **age**: For every one-year increase in age, HbA1c increases by **0.0202 units**, on average.
+
+-   **Std. Error**: Standard error for the estimate; smaller values indicate more precision.
+
+-   **t value**: Tests whether the coefficient differs from 0. A high value means it's unlikely due to chance.
+
+-   **Pr(\>\|t\|)**: p-value; \<0.05 means it's statistically **significant**.
+
+-   **F-statistic**: 179.3, p \<0.05, → Overall model is statistically significant.
+
+-   **R-squared**: 0.04485, → Only **4.5%** of the variation in HbA1c is explained by age.
+
+-   **Adjusted R-squared = 0.0446** is very close to the R-squared, suggesting that the inclusion of the predictor (age) doesn't drastically increase the explanatory power when accounting for the number of predictors.
+
+-   **Degrees of freedom**: 3818 (n - number of predictors - 1)
+
+Lets do for another independent variable
+
+```{r}
+uv_bmi <- lm(hba1c ~ bmi, data = diabetes)
+summary(uv_bmi)
+```
+
+You can do the univariable analysis for each independent variables one by one.
+
+Or, you can use **tbl_uvregression** from **gtsummary** package
+
+```{r}
+slr_model <- tbl_uvregression(
+    diabetes,
+    method = lm,
+    y = hba1c,
+    include = c("age", "gender", "crural", "bmi", "totchol")
+  )
+slr_model
+```
+
+### Multivariable analysis
+
+select the variables to be included in the multivariable model:
+
+-   Priori knowledge, literature review, Directed Acyclic Graph (DAG)
+
+-   Clinical significance
+
+-   Statistical significance
+
+-   Automatic selection - backward/forward
+
+-   Avoid Collinearity - Highly correlated predictors should not both be included
+
+Lets build a model with these risk factors: **age, gender, crural, bmi, totchol**
+
+```{r}
+mlr1 <- lm(hba1c ~ age + gender + crural + bmi + totchol, data = diabetes)
+summary(mlr1)
+```
+
+About **8.05%** of the variance in **HbA1c** is explained by the predictor variables in the model.
+
+You can summarize the output in a table
+
+```{r}
+mlr1_t <-tbl_regression(mlr1)
+mlr1_t
+```
+
+Lets compare with the previous SLR model
+
+```{r}
+tbl_merge(
+  list(slr_model, mlr1_t),  # List of gtsummary models to merge
+  tab_spanner = c("SLR", "MLR")  # Column headers for univariable and multivariable models
+)
+```
+
+lets **interpret** the result:
+
+-   After adjusting for gender, rural/urban status, BMI, and total cholesterol, age is positively associated with HbA1c. For each year increase in age, HbA1c increases by 0.02g/dl (95% CI: 0.01, 0.02, p \< 0.001).
+
+-   After adjusting for age, gender, rural/urban status, and total cholesterol, each unit increase in BMI is associated with a 0.04g/dlincrease in HbA1c (95% CI: 0.04, 0.05, p \< 0.001).
+
+-    After adjusting for age, gender, rural/urban status, and BMI, each unit (mmol/l) increase in total cholesterol is associated with a 0.11g/dl increase in HbA1c (95% CI: 0.07, 0.15, p \< 0.001).
+
+-   In SLR, being from a rural area was significantly associated with a 0.11 increase in HbA1c compared to urban areas (95% CI: 0.02, 0.20, p = 0.015). However, in MLR, after adjusting for age, gender, BMI, and total cholesterol, the association weakens and becomes non-significant (Beta = 0.07, 95% CI: -0.01, 0.16, p = 0.092).
+
+    -   In the SLR model, the relationship between rural/urban and HbA1c might have been influenced by confounding variables such as **age, BMI, gender, or cholesterol levels**. When these variables are included in the MLR model, they may explain some of the variance that was previously attributed to the rural/urban factor.
+
+-   In SLR, gender was not significantly associated with HbA1c (p = 0.13 for males compared to females). However, after adjusting for age, rural/urban status, BMI, and total cholesterol in MLR, being male is associated with a 0.09g/dl increase in HbA1c (95% CI: 0.00, 0.18, p = 0.050).
+
+    -   Gender could interact with other variables, such as BMI or age, which might have been masked in the SLR. In the MLR model, where these other variables are included, the effect of gender could become more apparent.
+
+Lets check for **interaction** terms
+
+You should examine the interaction between all numerical and numerical, categorical and categorical, and numerical and categorical variables.
+
+\~ Between gender and bmi
+
+```{r}
+mlr2 <- lm(hba1c ~ age + gender + crural + bmi + totchol + gender:bmi, data = diabetes)
+summary(mlr2)
+```
+
+The interaction term is not significant.
+
+### Model comparison
+
+Lets compare the model
+
+```{r}
+anova(mlr1, mlr2)
+```
+
+For both models, the Residual Sum of Square (RSS) value is essentially the same (6679.3), indicating that the inclusion of the interaction term does not reduce the residual variance.
+
+The F-statistic is 5e-04, which is very close to 0, indicating no substantial improvement in the model by adding the interaction term.
+
+The p-value for the F-test is \> 0.05. This suggests that the addition of the interaction term **does not significantly improve** the model. Model 1 (without the interaction term) is sufficient to explain the relationship between the predictors and **HbA1c**.
+
+**Final model**
+
+![](images/clipboard-1351721234.png)
+
+## Inference
+
+Lets obtain the 95% Confidence Interval for our model estimate
+
+```{r}
+tidy(mlr1, conf.int = T)
+```
+
+## Prediction
+
+Lets obtain the **fitted values** for **hba1c** in the regression model. The fitted values are the predicted values of the dependent variable based on the values of the independent variables (covariates), according to the model you fit.
+
+```{r}
+augment(mlr1)
+```
+
+**Predict new data**
+
+lets predict the **HbA1c** for a 70 year old male with BMI 38 and total cholesterol of 6 mmol/l living in urban area
+
+```{r}
+new.data <- expand.grid(age = 70,
+                         bmi = 38,
+                         totchol = 6,
+                         gender = 'male', 
+                         crural = 'urban')
+
+augment(mlr1,
+        newdata = new.data)
+```
+
+## Model checking
+
+**Test Used**: Breusch-Pagan test (via `ncvTest`) to check for **non-constant variance** of residuals (a violation of linear regression assumptions).
+
+**Null hypothesis (H₀)**: Constant variance of the residuals (homoscedasticity)
+
+```{r}
+ncvTest(mlr1)
+```
+
+Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance.
+This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
+
+**Test used**: Studentized Breusch-Pagan test for heteroscedasticity
+
+```{r}
+bptest(mlr1)
+```
+
+Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance.
+This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
+
+**Test used**: Shapiro-Wilk test for normality for residuals
+
+```{r}
+shapiro.test(mlr1$residuals)
+```
+
+Since the **p-value is \<0.05**, you **reject the null hypothesis** of normality. This suggests a **violation of the normality assumption** for residuals.
+
+you can also visualize it:
+
+```{r}
+res.mod <- residuals(mlr1)
+hist(res.mod)
+```
+
+lets do the diagnostic plot
+
+```{r}
+plot(mlr1)
+```
+
+you can also use the **sjplot** package
+
+```{r}
+plot_model(mlr1, type = "diag")
+```
+
+Also, check the extreme influential
+
+```{r}
+plot(mlr1, which = 4)
+```
+
+what to do if assumptions violated?
+
+-   Transform the outcome variable - Try log or square root transformation
+
+-   Keeps your current model but adjusts standard errors to fix inference issues due to heteroscedasticity.
+
+-   Use robust regression methods that are less sensitive to violations of assumptions, such as GLM
+
+**References**
+
+<https://stats.oarc.ucla.edu/r/dae/linear-regression-r-data-analysis-examples/>
+
+Kamarul Imran, Wan Nor Arifin, & Tengku Muhammad Hanis Tengku Mokhtar. (2024). *Data Analysis in Medicine and Health using R*. Retrieved from <https://bookdown.org/drki_musa/dataanalysis/>
+
+Lilja, D. R. (2016). *Linear regression using R: An introduction to data modeling*. University of Minnesota Libraries Publishing.

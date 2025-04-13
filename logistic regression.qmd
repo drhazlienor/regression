@@ -1,0 +1,600 @@
+---
+title: "Logistic Regression"
+author: "Dr Hazlienor Mohd Hatta"
+date: "15-April 2024"
+format:
+  html:
+    prefer-html: true
+    toc: true
+    toc-location: left
+    toc-depth: 4
+    toc-expand: 2
+    toc-title: Contents
+    code-links:
+      text: Github repo
+      icon: "file-code"
+      href: https://github.com/drhazlienor/regression.git
+      smooth-scroll: true
+    theme:
+      light: journal
+      dark:
+      - journal
+      - "theme-dark.scss"
+    grid:
+      sidebar-width: 300px
+      margin-width: 300px
+      body-width: 900px
+self-contained: true
+resource_files:
+- logistic regression.html
+---
+
+# Background
+
+## Problem statement
+
+Diabetes Mellitus (DM) is becoming more common, and early detection of individuals at high risk is crucial for better prevention and management. Various factors like age, gender, BMI, blood pressure, and blood sugar levels may influence the likelihood of developing DM. This study aims to use a **predictive model** to understand which factors are most strongly associated with DM and to help **identify individuals at risk** based on these factors.
+
+## Objective
+
+To examine the key factors that contribute to the likelihood of developing Diabetes Mellitus.
+
+## Dataset description
+
+This dataset consists of 3,820 individuals and is primarily focused on identifying potential predictors of Diabetes Mellitus (DM), with the variable **dmdx** (Diabetes diagnosis) serving as the outcome variable. The dataset includes various demographic, anthropometric, and clinical measurements to evaluate the factors that may influence the presence or absence of DM.
+
+| **Variable** | **Description**                                 |
+|--------------|-------------------------------------------------|
+| `codesub`    | Unique individual ID                            |
+| `age`        | Age in years                                    |
+| `dmdx`       | Ever diagnosed with diabetes (0 = No, 1 = Yes)  |
+| `height`     | Height in meters                                |
+| `weight`     | Weight in kg                                    |
+| `waist`      | Waist circumference in cm                       |
+| `hip`        | Hip circumference in cm                         |
+| `msbpr`      | Mean systolic blood pressure (right arm, mmHg)  |
+| `mdbpr`      | Mean diastolic blood pressure (right arm, mmHg) |
+| `hba1c`      | HbA1c level (mmol/l)                            |
+| `fbs`        | Fasting blood sugar (mmol/l)                    |
+| `mogtt2h`    | 2-hour post MOGTT glucose (mmol/l)              |
+| `totchol`    | Total cholesterol (mmol/l)                      |
+| `ftrigliz`   | Fasting triglycerides (mmol/l)                  |
+| `hdl`        | HDL cholesterol (mmol/l)                        |
+| `ldl`        | LDL cholesterol (mmol/l)                        |
+| `gender`     | Gender (0 = Female, 1 = Male)                   |
+| `crural`     | Residence area (0 = Urban, 1 = Rural)           |
+| `bmi`        | Body Mass Index (kg/m²)                         |
+
+## Motivation
+
+**Assess the independent effect of each predictor**: Linear regression enables the simultaneous evaluation of multiple independent variables to understand their unique contributions to HbA1c levels, while adjusting for other factors.
+
+**Predict HbA1c levels**: The model allows prediction of an individual’s HbA1c based on their characteristics, which supports early identification of individuals at risk of poor glycemic control.
+
+**Quantify relationships**: It provides regression coefficients that reflect the expected change in HbA1c for a one-unit increase in each predictor, offering clear insight into the strength and direction of associations.
+
+**Handle continuous outcomes**: Since HbA1c is a continuous variable, linear regression is a suitable and interpretable method for modeling and explaining variability in glycemic levels.
+
+## Assumptions
+
+-   The outcome is a binary or dichotomous variable (for binary logistic regression)
+
+-   Observations independent of each other
+
+-   Little or no multicollinearity among the independent variables
+
+-   Linearity in logit - linearity of independent variables and log odds of the dependent variable
+
+-   There is no influential values (extreme values or outliers) in the continuous predictors
+
+# Workflow
+
+1.  Prepare environment
+2.  Prepare data(read-view-transform-describe-explore)
+3.  Estimate: univariate analysis & Multivariate analysis - fitting the model (include interaction and confounding)
+4.  Inference
+5.  Prediction
+6.  Model assessment: Pearson & H-L, classification table, ROC curve
+7.  Presentation
+
+## Prepare environment
+
+**Install required packages**
+
+remove \# when you run this code
+
+```{r}
+#install.packages(setdiff(c("tidyverse", "broom", "haven", "gtsummary", "corrplot",  "mfp", "LogisticDx", "car", "lattice", "caret", "generalhoslem"), rownames(installed.packages())))
+```
+
+**Load required packages**
+
+```{r}
+library(tidyverse) #data wrangling, visualization, and analysis
+library(broom) #tidy data frames for easier summary
+library(haven) #Reads data from SPSS, Stata, and SAS — importing .sav, .dta
+library(gtsummary) #summary tables for data and regression models
+library(corrplot) # visualize correlation
+library(mfp) #electing transformations
+library(LogisticDx) #Diagnostic tools for logistic regression
+library(car) # check for multicollinearity
+library(lattice) # check model fitness
+library(caret) # check model fitness
+library(generalhoslem) # check model fitness
+```
+
+## Load data
+
+```{r}
+diabetes <- 
+  read_dta('diabetes.dta')
+```
+
+## Data Exploration and Wrangling
+
+```{r}
+str(diabetes)
+```
+
+bmi is labelled as weight. lets change the label
+
+```{r}
+attr(diabetes$bmi, "label") <- "BMI"
+```
+
+convert all categorical variable as factor
+
+```{r}
+diabetes <- 
+  diabetes %>% 
+  mutate(across(where(is.labelled), as_factor))
+glimpse(diabetes)
+```
+
+summary of all variables
+
+```{r}
+summary(diabetes)
+```
+
+Lets visualize the distribution of some of the variables between diabetic and non-diabetic patient
+
+DM by age
+
+```{r}
+diabetes |>
+  ggplot(aes(age)) + 
+  geom_histogram() + 
+  facet_grid(. ~ dmdx)
+```
+
+BMI by DM
+
+```{r}
+diabetes |>
+  ggplot(aes(bmi)) + 
+  geom_histogram() + 
+  facet_grid(. ~ dmdx)
+```
+
+DM by gender
+
+```{r}
+diabetes |>
+  ggplot(aes(gender)) + 
+  geom_bar() + 
+  facet_grid(. ~ dmdx)
+```
+
+lets check for **correlated variable**
+
+```{r}
+corr <- diabetes %>% dplyr::select(age, msbpr, mdbpr, fbs, mogtt2h, 
+                    totchol, ftrigliz, hdl) %>% 
+                    cor(use = 'complete.obs')
+corr
+```
+
+or, better visualize the correlation
+
+```{r}
+corrplot(corr, type = 'upper', order = 'hclust')
+```
+
+FBS and GTT might be strongly correlated because both are measures of blood glucose levels. If these two predictors are highly correlated, it can lead to multicollinearity. so does SBP and DBP
+
+lets see the **baseline differences** between the group DM vs non-DM
+
+```{r}
+diabetes %>%
+  tbl_summary(
+    by = dmdx,  # compare across DM status
+    include = c(age, gender, bmi, totchol, crural), 
+    statistic = list(all_continuous() ~ "{mean} ({sd})"),
+    digits = all_continuous() ~ 2,
+  ) %>%
+  modify_header(label ~ "**Variable**") %>%
+  bold_labels()
+```
+
+The baseline differences between the two groupsmust be comparable to ensure that any observed differences in the outcome variable can be attributed to the risk factors, rather than being confounded by pre-existing differences.
+
+## Estimate
+
+### Univariable Analysis
+
+Lets do univariable analysis first:
+
+-   **Identify variables** that have a significant association with the outcome when considered **individually**. This is useful before building a multivariable model.
+
+-   When the **effect size (e.g., odds ratio)** changes between univariable and multivariable logistic regression — either stronger or weaker — it gives insight into how the predictor interacts with other variables.
+
+    --\> The reduced effect size suggests that the association between \[predictor\] and diabetes is confounded by other variables such as \[confounder/mediator\]
+
+    --\> The stronger effect in the multivariable model suggests a suppression effect, where adjusting for \[suppressor variable\] revealed a stronger true association between \[predictor\] and diabetes
+
+**univariable analysis : DV=dm (Yes/No), Covariate=age**
+
+```{r}
+uv.age <- glm(dmdx ~ age, family = binomial(link = 'logit'), 
+                  data = diabetes)
+summary(uv.age)
+```
+
+**understanding the output:**
+
+**Coefficients:** Each predictor's **Estimate** tells you how much the log-odds of the outcome change for a one-unit increase in that predictor, assuming all other variables are held constant.
+
+-   It gives the baseline log-odds for the model.The intercept represents the log-odds of the outcome when all independent variables are zero.
+
+-   Each predictor's **Estimate** tells you how much the log-odds of the outcome change for a one-unit increase in that predictor, assuming all other variables are held constant. E.g. As age increases by 1 year, the log odds of the outcome increase by about 0.051
+
+-   p-value indicates that the significance of the predictor
+
+**Null deviance**: This is the deviance of the model that includes no predictors, i.e., just the intercept. It represents the goodness-of-fit for a model with no predictors.
+
+**Residual deviance**: This is the deviance of the model with age included as a predictor. A reduction in deviance from the null deviance indicates that the model with age as a predictor fits the data better than the null model.
+
+**AIC (Akaike Information Criterion)**: The AIC value is used to compare models. A lower AIC indicates a better-fitting model, taking both model fit and complexity into account.
+
+**Degree of freedom:** the number of observationsminus the number of parameters being estimated.
+
+Lets do for another independent variable
+
+**univariable analysis : DV=dm (Yes/No), IDV=gender (female=0, male=1)**
+
+```{r}
+uv.gen <- glm(dmdx ~ gender, family = binomial(link = 'logit'), 
+                  data = diabetes)
+summary(uv.gen)
+```
+
+or, you can run the analysis for all predictors at once
+
+```{r}
+uv_model <- tbl_uvregression(
+    diabetes,
+    method = glm,
+    y = dmdx,
+    method.args = list(family = binomial),
+    exponentiate = TRUE, # to get the odds ratio
+    include = c("age", "gender", "bmi", "totchol")
+  )
+uv_model
+```
+
+### Multivariable analysis
+
+select the variables to be included in the multivariable model:
+
+-   Priori knowledge, literature review, Directed Acyclic Graph 
+
+-   Clinical significance
+
+-   Statistical significance
+
+-   Automatic selection - backward/forward
+
+-   Avoid Collinearity - Highly correlated predictors should not both be included
+
+Lets build a model with these risk factors: **age, gender, bmi, totchol**
+
+multivariable analysis: DM \~ age+gender+ bmi+totchol
+
+```{r}
+mlog1 <- glm(dmdx ~ age + gender + bmi +totchol, 
+                      family = binomial(link = 'logit'), 
+                      data = diabetes)
+summary(mlog1)
+```
+
+Lets summarize the output and get the Odd Ratios
+
+```{r}
+mlog1_t <- tbl_regression(mlog1, exponentiate = TRUE)
+mlog1_t
+```
+
+Lets compare with the previous simple logistic regression model
+
+```{r}
+tbl_merge(
+  list(uv_model, mlog1_t),  # List of models to merge
+  tab_spanner = c("SlogR", "MlogR")  # Column headers for univariable and multivariable models
+)
+```
+
+The odds of having diabetes increase by 6% for each additional year of age (OR = 1.06, 95% CI: 1.05–1.07, p-value \<0.001), after adjusting for **gender**, **BMI**, and **total cholesterol**.
+
+After adjusting for **age**, **BMI**, and **total cholesterol**, males still have 27% higher odds of having diabetes compared to females (OR = 1.27, 95% CI: 1.03–1.57, p-value = 0.028).
+
+After adjusting for **age**, **gender**, and **total colesterol**, each 1-unit increase in BMI is associated with a 10% higher odds of having diabetes (OR = 1.10, 95% CI: 1.08–1.12, p-value \<0.001)
+
+After adjusting for **age**, **gender**, **BMI**, and **crural status**, total cholesterol is no longer significantly associated with the odds of having diabetes (OR = 0.98, 95% CI: 0.90–1.07, p-value = 0.6). Possible explanation:
+
+-   BMI influences both total cholesterol levels and the risk of diabetes, individuals with higher body mass may also have higher cholesterol levels. When controlling for BMI, its effect on diabetes risk may diminish the significance of total cholesterol due to **confounding**. The OR changed by \>10% (1.14 -\> 0.98 \~ 14%).
+
+-   BMI and total cholesterol may be **correlated**.
+
+Lets check for **multicollinearity**
+
+```{r}
+vif(mlog1)
+```
+
+A VIF value near **1** indicates **no multicollinearity.**
+
+A VIF above **5** **- 10** indicates a potential issue with multicollinearity
+
+### Interaction
+
+Interaction may occurs when the effect of one variable on the outcome changes depending on the level of another variable.
+
+For example, the relationship between age and diabetes risk might differ for men and women. As age increases, the odds of diabetes may increase at a faster rate in females than in males, e.g. due to hormonal changes during menopause.
+
+Lets examine if the interaction term between age and gender is significant or not.
+
+**multivariable analysis with interaction: DM \~ age+gender+bmi+ totchol + age\*gender**
+
+```{r}
+mlog1.in <- glm(dmdx ~ age + gender + bmi + totchol + age:gender, 
+                      family = binomial(link = 'logit'), 
+                      data = diabetes)
+summary(mlog1.in)
+```
+
+There is **no significant interaction** between age and gender in predicting the odds of diabetes. In other words, the effect of age on diabetes risk is not different for males and females.
+
+### Model comparison
+
+Which model is better? with or without interaction terms?
+
+```{r}
+anova(mlog1, mlog1.in, test = "Chisq")
+```
+
+Based on the analysis of deviance, the inclusion of the interaction term between age and gender in Model 2 **did not significantly** improve the model fit (p-value = 0.3127) Therefore, the **simpler model** (Model 1) without the interaction term is preferred for predicting the odds of diabetes.
+
+## Inference (adding CI)
+
+**final model: DM \~ age+gender+ bmi + totchol**
+
+![](images/clipboard-509887115.png)
+
+lets obtain the coefficient and 95% CI for the log odds
+
+```{r}
+tbl_regression(mlog1)
+```
+
+equation:
+
+![](images/clipboard-1008614813.png)
+
+or, you can use the tidy function to get the coefficients and 95% CI for the coefficients
+
+```{r}
+mlog1_or<- tidy(mlog1, 
+                    exponentiate = TRUE, # to get the OR, remove for log odds
+                    conf.int = T) 
+mlog1_or
+```
+
+## Prediction
+
+types of prediction
+
+-   "Link": Predictions on the scale of the link function (log-odds for logistic regression).
+
+-   "Response": Predictions on the scale of the response variable (probabilities for logistic regression).
+
+-   "Terms": Contributions of each predictor variable to the linear prediction
+
+### log odds
+
+```{r}
+predict_logodd <- augment(mlog1, type.predict = 'link') 
+predict_logodd
+```
+
+### odds
+
+odds ratio = exponentiate(log odds)
+
+lets add a column for odds
+
+```{r}
+predict_odds <- predict_logodd %>%
+  mutate(odds = exp(.fitted))
+predict_odds
+```
+
+### probability
+
+Lets get the predicted probability for each observation
+
+```{r}
+predict_prob <-augment(mlog1, type.predict = 'response', se.fit = TRUE) 
+predict_prob
+```
+
+Lets visualize the probabilities (age)
+
+```{r}
+ggplot(predict_prob, aes(x = age, y = .fitted)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess") +
+  labs(title = "Predicted Probability vs Age",
+       x = "Age", y = "Predicted Probability")
+
+```
+
+or you can visualize gender-specific probabilities
+
+```{r}
+ggplot(predict_prob, aes(x = bmi, y = .fitted, color = gender, fill = gender)) +
+  geom_smooth(method = "loess") +
+  labs(title = "Predicted Probability vs bmi",
+       x = "Age", y = "Predicted Probability")
+```
+
+### Predict new data
+
+lets predict the **log odds** of being diabetic for a 70 year old male with BMI 38 and total cholesterol of 6 mmol/l
+
+```{r}
+newdata <- expand.grid(age = 70,
+                         bmi = 38,
+                         totchol = 6,
+                         gender = 'male')
+
+augment(mlog1,
+        newdata = newdata,
+        type.predict = 'link')
+```
+
+predict the odds
+
+```{r}
+exp(0.2647592)
+```
+
+predict the probability
+
+```{r}
+augment(mlog1,
+        newdata = newdata,
+        type.predict = 'response')
+```
+
+There is a **56.6%** chance this individual has diabetes based on your model.
+
+## Model Performance
+
+lets evaluate the **confusion matrix and performance statistics** based on the model predictions:
+
+```{r}
+mlog1.prob <- 
+  augment(mlog1, 
+          type.predict = 'response') |>
+  mutate(pred.class = factor(ifelse(.fitted > 0.5, 'yes', 'no')))
+
+
+confusionMatrix(mlog1.prob$dmdx, mlog1.prob$pred.class)
+```
+
+-   The logistic regression model demonstrated an overall accuracy of 87.96% (95% CI: 86.88%, 88.97%) - **\>80%**
+
+-   The model exhibited high **sensitivity** (88.1%), indicating a good ability to correctly identify individuals without diabetes.
+
+-   **Specificity** was low (33.3%), reflecting poor performance in identifying individuals with diabetes.
+
+lets examine the ROC, osius rojek, hosmer lemeshow, modified HL, Stukel test
+
+```{r}
+fit_m <-gof(mlog1, g=8)
+fit_m$gof
+```
+
+**AUROC** is \>70%
+
+lets perform the Hosmer Lemeshow test
+
+```{r}
+library(generalhoslem)
+logitgof(diabetes$dmdx, fitted(mlog1), g = 10)
+```
+
+**p \> 0.05** → Model **fits well** .
+
+Lets check the assumptions too.
+
+**Linearity in logit assumption**
+
+The relationship between the continuous predictor variables and the log-odds (logit) of the outcome variable is linear. This means that for each unit increase in a continuous predictor, the log-odds of the outcome are predicted to change by a constant amount.
+
+Lets test whether the relationship between continuous variables (age, BMI, and total cholesterol) and the risk of diabetes follows a straight-line pattern on the logit scale (log odds).
+
+```{r}
+lin.logit <- 
+  mfp(dmdx ~ fp(age) + fp(totchol) + fp(bmi) + gender,
+      family = binomial(link = 'logit'),
+      data = diabetes, verbose = T)
+```
+
+```{r}
+summary(lin.logit)
+```
+
+While age is significant in the model, it has been transformed - indicates that **age is non-linearly related to the log odds of diabetes.** Non-linear relationship, so the linearity assumption is violated, but we've corrected this with a transformation.
+
+The linear term for BMI was significant (p \< 0.001), which means a **linear relationship** with the log odds is appropriate.
+
+**Extreme outliers**
+
+The most **extreme outliers** in the data can be examined by visualizing the Cook’s distance values. Here we label the top 3 largest values
+
+```{r}
+
+cooks <- cooks.distance(mlog1)
+plot(cooks, type = "h", ylab = "Cook's Distance", main = "Cook's Distance by Observation")
+
+```
+
+You can also computes the standardized residuals (`.std.resid`) and the Cook’s distance (`.cooksd`) using the R function `augment()` \[broom package\].  Data points with an absolute standardized residuals above 3 represent possible outliers and may deserve closer attention.
+
+```{r}
+mlog1_data <- augment(mlog1) %>% 
+  mutate(index = 1:n()) 
+```
+
+then, filter potential influential data points with standardized residuals \> 3
+
+```{r}
+mlog1_data %>% 
+  filter(abs(.std.resid) > 3)
+```
+
+There is no influential observations in our data.
+
+However, if you have influential outliers in your data, consider:
+
+-   **Remove Outliers**: Exclude extreme values if they're errors or irrelevant, but be cautious of bias or data loss.
+
+-   **Transform Data**: Apply log or other transformations to reduce skewness and lessen the impact of outliers.
+
+-   **Use Robust Methods**: Opt for non-parametric or robust models (e.g., random forests, robust regression) that are less sensitive to outliers.
+
+References
+
+-   <https://www.sthda.com/english/articles/36-classification-methods-essentials/148-logistic-regression-assumptions-and-diagnostics-in-r/>
+
+-   <https://stats.oarc.ucla.edu/r/dae/logit-regression/>
+
+-   Boehmke, B., & Greenwell, B. (2020). *Hands-On Machine Learning with R*. O'Reilly Media.
+
+-   Kleinbaum, D. G., Klein, M., Kleinbaum, D. G., & Klein, M. (2010). Introduction to logistic regression. *Logistic regression: a self-learning text*, 1-39.
+
+-   Zhang, Z. & Wang, L. (2017-2025). *Advanced statistics using R*. Granger, IN: ISDSA Press. https://doi.org/10.35566/advstats. ISBN: 978-1-946728-01-2.
+
+-   Kamarul Imran, Wan Nor Arifin, & Tengku Muhammad Hanis Tengku Mokhtar. (2024). *Data Analysis in Medicine and Health using R*. Retrieved from <https://bookdown.org/drki_musa/dataanalysis/>
