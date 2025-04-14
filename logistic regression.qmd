@@ -104,7 +104,7 @@ This dataset consists of 3,820 individuals and is primarily focused on identifyi
 remove \# when you run this code
 
 ```{r}
-#install.packages(setdiff(c("tidyverse", "broom", "haven", "gtsummary", "corrplot",  "mfp", "LogisticDx", "car", "lattice", "caret", "generalhoslem"), rownames(installed.packages())))
+#install.packages(setdiff(c("tidyverse", "broom", "haven", "gtsummary", "corrplot",  "mfp", "pROC", "car", "lattice", "caret", "generalhoslem"), rownames(installed.packages())))
 ```
 
 **Load required packages**
@@ -116,7 +116,7 @@ library(haven) #Reads data from SPSS, Stata, and SAS — importing .sav, .dta
 library(gtsummary) #summary tables for data and regression models
 library(corrplot) # visualize correlation
 library(mfp) #electing transformations
-library(LogisticDx) #Diagnostic tools for logistic regression
+library(pROC) #Diagnostic tools for logistic regression
 library(car) # check for multicollinearity
 library(lattice) # check model fitness
 library(caret) # check model fitness
@@ -509,11 +509,13 @@ confusionMatrix(mlog1.prob$dmdx, mlog1.prob$pred.class)
 
 -   **Specificity** was low (33.3%), reflecting poor performance in identifying individuals with diabetes.
 
-lets examine the ROC, osius rojek, hosmer lemeshow, modified HL, Stukel test
+lets examine the ROC
 
 ```{r}
-fit_m <-gof(mlog1, g=8)
-fit_m$gof
+y <-diabetes$dmdx
+roc_obj <- roc(response = y, predictor = fitted(mlog1))
+plot(roc_obj)
+auc(roc_obj)
 ```
 
 **AUROC** is \>70%

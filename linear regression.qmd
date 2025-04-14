@@ -102,7 +102,7 @@ This dataset consists of 3,820 individuals and is primarily focused on identifyi
 remove \# when you run this code
 
 ```{r}
-#install.packages(setdiff(c("haven", "psych", "tidyverse", "broom", "gtsummary", "ggplot2", "GGally", "lmtest", "rsq", "car", "sjplot", "corrplot"), rownames(installed.packages())))
+#install.packages(setdiff(c("haven", "psych", "tidyverse", "broom", "gtsummary", "ggplot2", "GGally", "lmtest", "rsq", "car", "sjPlot", "corrplot", "broom.helpers"), rownames(installed.packages())))
 ```
 
 load library
@@ -112,6 +112,7 @@ library(haven)       # To read SPSS, Stata, and SAS data files
 library(psych)       # For descriptive statistics and psychometric analysis
 library(tidyverse)   # for data manipulation and visualization
 library(broom)       # Converts model objects into tidy data frames
+library(broom.helpers)
 library(gtsummary)   # For publication-ready summary tables
 library(ggplot2)     # Data visualization based on the grammar of graphics
 library(GGally)      # for correlation plot, scatterplot matrices, etc.
@@ -311,7 +312,7 @@ lets **interpret** the result:
 
 -   After adjusting for age, gender, rural/urban status, and total cholesterol, each unit increase in BMI is associated with a 0.04g/dlincrease in HbA1c (95% CI: 0.04, 0.05, p \< 0.001).
 
--    After adjusting for age, gender, rural/urban status, and BMI, each unit (mmol/l) increase in total cholesterol is associated with a 0.11g/dl increase in HbA1c (95% CI: 0.07, 0.15, p \< 0.001).
+-   After adjusting for age, gender, rural/urban status, and BMI, each unit (mmol/l) increase in total cholesterol is associated with a 0.11g/dl increase in HbA1c (95% CI: 0.07, 0.15, p \< 0.001).
 
 -   In SLR, being from a rural area was significantly associated with a 0.11 increase in HbA1c compared to urban areas (95% CI: 0.02, 0.20, p = 0.015). However, in MLR, after adjusting for age, gender, BMI, and total cholesterol, the association weakens and becomes non-significant (Beta = 0.07, 95% CI: -0.01, 0.16, p = 0.092).
 
@@ -393,8 +394,7 @@ augment(mlr1,
 ncvTest(mlr1)
 ```
 
-Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance.
-This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
+Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance. This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
 
 **Test used**: Studentized Breusch-Pagan test for heteroscedasticity
 
@@ -402,8 +402,7 @@ This means the **residuals do not have constant variance** — **heteroscedastic
 bptest(mlr1)
 ```
 
-Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance.
-This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
+Since the **p-value is highly significant**, we **reject the null hypothesis** of constant variance. This means the **residuals do not have constant variance** — **heteroscedasticity is present**.
 
 **Test used**: Shapiro-Wilk test for normality for residuals
 
